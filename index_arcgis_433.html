@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>ArcGIS JS API + Custom Flask API</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
+    <style>
+        html,
+        body,
+        #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+        #controls {
+            padding: 10px;
+            background-color: white;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+
+    <script src="https://js.arcgis.com/4.33/"></script>
+
+    <script type="module">
+        const [Map, MapView, GeoJSONLayer, Legend, esriConfig, Expand, Graphic, GraphicsLayer] = await $arcgis.import([
+            "@arcgis/core/Map.js",
+            "@arcgis/core/views/MapView.js",
+            "@arcgis/core/layers/GeoJSONLayer.js",
+            "@arcgis/core/widgets/Legend.js",
+            "@arcgis/core/config.js",
+            "@arcgis/core/widgets/Expand.js",
+            "@arcgis/core/Graphic.js",
+            "@arcgis/core/layers/GraphicsLayer.js"
+        ]);
+        esriConfig.portalUrl = "https://igisportal.geomatics.ncku.edu.tw/portal/";
+
+        // 圖層群組
+        const thematicLayers = {
+            "人口統計": [
+                { name: "110年12月 綠島村里人口統計", id: "974ade8073ac4457bf6ae42f5b8ec0a7" },
+                { name: "111年12月 綠島村里人口統計", id: "e9f3730a70764e5d8dd403c75fa9c096" },
+                { name: "112年12月 綠島村里人口統計", id: "ea29b005256d459ab331afab22f388cb" },
+                { name: "113年12月 綠島村里人口統計", id: "f8c0e16368ac4f4285ab83c1fb6da83d" },
+            ],
+            "醫療院所": [
+                { name: "112年12月綠島鄉統計區醫療院所統計_最小統計區", id: "325d138727be424a8842c2e082dd8770" }
+            ]
+        };
+        
+        // 4. 建立地圖和視圖
+        const map = new Map({
+            basemap: "dark-gray" // 使用 Esri 的地形底圖
+        });
+
+        const view = new MapView({
+            container: "viewDiv",
+            map: map,
+            center: [121.48993978911774, 22.655928615598178], // 中心點設為綠島
+            zoom: 13
+        });
+
+        // 1. 取得所有選單的 DOM 元素
+        const themeSelector = document.getElementById("themeSelector");
+        const layerSelector1 = document.getElementById("layerSelector1");
+        const layerSelector2 = document.getElementById("layerSelector2");
+        const controlsContainer = document.getElementById("controls");
+
+        // 2. 函式：用來填滿「主題」選單
+        function populateThemeSelector() {
+            // Object.keys(thematicLayers) 會得到 ["人口統計", "醫療院所"]
+            const themes = Object.keys(thematicLayers);
+            themes.forEach(theme => {
+                const option = document.createElement("option");
+                option.value = theme; // 值和顯示文字都是主題名稱
+                option.textContent = theme;
+                themeSelector.appendChild(option);
+            });
+        }
+
+        // 3. 函式：根據選擇的主題，來填滿「圖層」選單
+        function updateLayerSelectors(selectedTheme) {
+            // 先清空兩個圖層選單
+            layerSelector1.innerHTML = "";
+            layerSelector2.innerHTML = "";
+
+            // 如果使用者選回了 "-- 請先選擇主題 --"
+            if (!selectedTheme) {
+                // 加入預設選項並禁用選單
+                const defaultOption = new Option("-- 請先選擇主題 --", "");
+                layerSelector1.appendChild(defaultOption);
+                layerSelector2.appendChild(defaultOption.cloneNode(true));
+                layerSelector1.disabled = true;
+                layerSelector2.disabled = true;
+                return;
+            }
+
+            // 取得該主題下的所有圖層
+            const layers = thematicLayers[selectedTheme];
+
+            // 遍歷圖層並產生 options
+            layers.forEach(layer => {
+                const option = new Option(layer.name, layer.id); // Option(顯示文字, 值)
+                layerSelector1.appendChild(option);
+                layerSelector2.appendChild(option.cloneNode(true)); // 複製一個給第二個選單
+            });
+
+            // 填滿後，啟用選單
+            layerSelector1.disabled = false;
+            layerSelector2.disabled = false;
+
+            // 主題切換後，立即同步一次預設選項
+            syncLayerSelectors(layerSelector1, layerSelector2);
+        }
+
+        // 4. 為「主題選單」加上 change 事件監聽器
+        themeSelector.addEventListener("change", (event) => {
+            // 當選項改變時，呼叫更新函式
+            updateLayerSelectors(event.target.value);
+        });
+
+        // 頁面載入後立刻執行，填滿選單
+        populateThemeSelector();
+
+        // 6. 函式：同步兩個圖層選單，禁用另一個選單中相同的選項
+        function syncLayerSelectors(changedSelector, targetSelector) {
+            const selectedValue = changedSelector.value;
+            const options = targetSelector.options;
+
+            // 遍歷目標選單的所有選項
+            for (let i = 0; i < options.length; i++) {
+                // 如果選項的值和被選中的值相同，就禁用它
+                if (options[i].value === selectedValue) {
+                    options[i].disabled = true;
+                } else {
+                    // 否則就確保它是啟用的（當使用者來回切換選擇時）
+                    options[i].disabled = false;
+                }
+            }
+        }
+
+        // 7. 為兩個圖層選單加上 change 事件監聽器
+        layerSelector1.addEventListener("change", () => {
+            syncLayerSelectors(layerSelector1, layerSelector2);
+        });
+
+        layerSelector2.addEventListener("change", () => {
+            syncLayerSelectors(layerSelector2, layerSelector1);
+        });
+
+        // 5. 監聽按鈕點擊事件
+        document.getElementById("runAnalysisBtn").addEventListener("click", () => {
+
+            // 從下拉式選單讀取使用者選擇的圖層 Item ID
+            const selectedItemId1 = layerSelector1.value;
+            const selectedItemId2 = layerSelector2.value;
+
+            if (selectedItemId1 && selectedItemId2 && selectedItemId1 === selectedItemId2) {
+                alert("請選擇兩個不同的圖層進行比較！");
+                return; // 停止後續所有程式碼的執行
+            }
+
+            if (!selectedItemId1 || !selectedItemId2) {
+                alert("請選擇兩個要分析的圖層！");
+                return;
+            }
+            
+            // 清除上一次的圖層
+            const oldLayer = map.findLayerById("dynamicDataLayer");
+            if(oldLayer){
+                map.remove(oldLayer);
+            }
+
+            // 6. Fetch 邏輯
+            fetch('http://127.0.0.1:5000/api/time-difference', {
+                method: 'POST',
+                // --- 新增 body 來傳遞參數 ---
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    itemId1: selectedItemId1,
+                    itemId2: selectedItemId2
+                })
+            })
+            .then(response => {
+            if (!response.ok) {
+                // .text() 會讀取錯誤訊息的內容
+                return response.text().then(text => { throw new Error(text) });
+            }
+            return response.json();
+            }).then(records => {
+                alert("成功取得資料，正在建立分析結果圖層！");
+
+                // 8. 建立渲染器 (Renderer)，根據 POP_DIFF (人口差異) 欄位來分級設色
+                const increased = {
+                    type: "simple-fill",
+                    color: "#e63946",
+                    outline: { color: "white", width: 0.5 }
+                }
+
+                const same = {
+                    type: "simple-fill",
+                    color: "#fefae0",
+                    outline: { color: "white", width: 0.5 }
+                }
+
+                const decreased = {
+                    type: "simple-fill",
+                    color: "#669bbc",
+                    outline: { color: "white", width: 0.5 }
+                }
+
+                // 9. 建立彈出視窗 (Popup) 模板
+                const popupTemplate = {
+                    title: "{village}", // {欄位名稱}
+                    fieldInfos: [
+                        {
+                            fieldName: "POP_DIFF",
+                            visible: false,
+                            label: "人口差異"},
+                        {
+                            fieldName: "year_older",
+                            label: "較舊時間"},
+                        {
+                            fieldName: "POP_older",
+                            label: "較舊時間人口"},
+                        {
+                            fieldName: "year_newer",
+                            label: "較新時間"},
+                        {
+                            fieldName: "POP_newer",
+                            label: "較新時間人口"},
+                    ],
+                    content: [
+                        {type: "text",
+                            text: "<b>人口變化為 {POP_DIFF} 人</b>"
+                        },
+                        {type: "fields"}
+                    ]
+                };
+
+                // 遍歷從後端收到的每一筆紀錄
+                const graphics = records.map(record => {
+
+                    const renderer = (record.POP_DIFF > 0)
+                        ? increased
+                        : (record.POP_DIFF < 0)
+                            ? decreased
+                            : same;
+                    
+                    // 3. 建立 Graphic 物件
+                    return new Graphic({
+                        // 4. 指定幾何
+                        geometry: {
+                            type: "polygon", 
+                            rings: record.SHAPE.rings,
+                            spatialReference: {
+                                wkid: 102100
+                            }
+                        },
+                        symbol: renderer,
+                        // 5. 將紀錄中所有其他欄位都放進 attributes
+                        attributes: record,
+                        popupTemplate: popupTemplate
+                    });
+                });
+
+                // 建立 GraphicsLayer
+                const graphicsLayer = new GraphicsLayer({
+                    id: "dynamicDataLayer",
+                    graphics: graphics, // 將我們建立的所有 Graphic 物件放進來
+                });
+
+                // 11. 將圖層加入地圖
+                map.add(graphicsLayer);
+
+            })
+            .catch(error => {
+                console.error('錯誤:', error);
+                alert("請求失敗，請查看 Console 的錯誤訊息。");
+            });
+        });
+
+        // 12. 建立圖例元件
+        const legend = new Legend({
+            view: view
+        });
+        view.ui.add(legend, "bottom-left");
+
+        // 13.  Expand 元件
+        const expand = new Expand({
+            view: view,
+            content: controlsContainer, // 將我們的 controls div 放進去
+            expandIcon: "layer-filter", // 設置圖示
+            group: "top-right",
+            expanded: true
+        });
+        view.ui.add(expand, "top-right");
+    </script>
+</head>
+<body>
+    <div id="viewDiv"></div>
+    <div id="controls">
+    <h4>兩時期差分析</h4>
+    
+    <div>
+        <label for="themeSelector">選擇主題:</label>
+        <select id="themeSelector">
+            <option value="">-- 請先選擇主題 --</option>
+        </select>
+    </div>
+
+    <hr>
+
+    <div style="margin-top: 5px;">
+        <label for="layerSelector1">圖層一:</label>
+        <select id="layerSelector1" disabled>
+            <option value="">-- 請先選擇主題 --</option>
+        </select>
+    </div>
+    <div style="margin-top: 5px;">
+        <label for="layerSelector2">圖層二:</label>
+        <select id="layerSelector2" disabled>
+            <option value="">-- 請先選擇主題 --</option>
+        </select>
+    </div>
+    
+    <hr>
+    <button id="runAnalysisBtn">執行兩時間差分析</button>
+</div>
+</body>
+</html>

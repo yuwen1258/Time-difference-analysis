@@ -1,0 +1,7 @@
+Flask
+Flask-Cors
+arcgis
+gunicorn
+python-dotenv
+pandas
+geopandas
