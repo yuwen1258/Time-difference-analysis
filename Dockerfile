@@ -19,4 +19,5 @@ EXPOSE 10000
 
 # 步驟 7: 容器啟動時要執行的指令 (使用 gunicorn 啟動 Flask)
 # Render 偏好使用 10000 port
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:10000", "app:app"]
+#CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:10000", "app:app"]
+CMD ["python", "-c", "from app import app; print('--- Python Check: Successfully imported app object! ---')"]
