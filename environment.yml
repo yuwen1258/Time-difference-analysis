@@ -1,0 +1,14 @@
+name: gis_env # 環境名稱
+channels:     # 告訴 Conda 去哪些頻道找套件
+  - esri
+  - conda-forge
+  - defaults
+dependencies: # 需要安裝的套件列表
+  - python=3.9
+  - arcgis
+  - flask
+  - flask-cors
+  - gunicorn
+  - python-dotenv
+  - pandas
+  - geopandas
