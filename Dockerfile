@@ -32,5 +32,4 @@ RUN echo "--- Final package list in gis_env ---" && \
     conda list
 EXPOSE 10000
 
-#CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--log-level", "debug"]
-CMD ["python", "app.py"]
+CMD ["conda", "run", "-n", "gis_env", "gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--log-level", "debug"]
