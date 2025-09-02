@@ -6,6 +6,12 @@ from flask_cors import CORS
 
 # 載入 .env 檔案中的環境變數
 load_dotenv()
+# 1. 從環境變數讀取 ArcGIS Online 的帳號和密碼
+username = os.getenv("ARCGIS_USERNAME")
+password = os.getenv("ARCGIS_PASSWORD")
+
+if not username or not password:
+    raise ValueError("FATAL ERROR: Environment variables not set.")
 
 app = Flask(__name__)
 CORS(app)
@@ -42,13 +48,6 @@ def time_difference_analysis():
         # 從 JSON 中取得前端傳來的兩個 Item ID
         item_newer_id = newer_layer_info['id']
         item_older_id = older_layer_info['id']
-
-        # 1. 從環境變數讀取 ArcGIS Online 的帳號和密碼
-        username = os.getenv("ARCGIS_USERNAME")
-        password = os.getenv("ARCGIS_PASSWORD")
-
-        if not username or not password:
-            raise ValueError("找不到 ARCGIS_USERNAME 或 ARCGIS_PASSWORD，請檢查 .env 檔案")
         
         # 2. 使用帳號密碼登入 ArcGIS Online
         gis = GIS("https://igisportal.geomatics.ncku.edu.tw/portal/", username=username, password=password)

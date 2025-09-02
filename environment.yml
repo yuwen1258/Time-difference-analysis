@@ -10,5 +10,6 @@ dependencies: # 需要安裝的套件列表
   - flask-cors
   - gunicorn
   - python-dotenv
+  - python-dotenv
   - pandas
   - geopandas
