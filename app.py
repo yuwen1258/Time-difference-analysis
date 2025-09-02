@@ -1,7 +1,10 @@
 import os
+from dotenv import load_dotenv
 from arcgis.gis import GIS
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
+
+load_dotenv() 
 
 # 1. 從環境變數讀取 ArcGIS Online 的帳號和密碼
 username = os.getenv("ARCGIS_USERNAME")
